@@ -188,43 +188,67 @@ class ContagionRiskAnalyzer:
         self.network_builder = FinancialNetworkBuilder()
         
     def prepare_graph_data(self, 
-                         institutions_data: pd.DataFrame,
-                         exposures_matrix: Union[np.ndarray, pd.DataFrame]) -> Data:
-        """
-        Prepare graph data for GNN input
+                     institutions_data: pd.DataFrame,
+                     exposures_matrix: Union[np.ndarray, pd.DataFrame]) -> Data:
+    """
+    Prepare graph data for GNN input
+    
+    Args:
+        institutions_data: DataFrame containing institution features.
+                           Assumes 'institution_id' is a column and other numeric
+                           columns like 'assets', 'capital', 'risk_weight' exist.
+        exposures_matrix: Matrix of financial exposures
         
-        Args:
-            institutions_data: DataFrame containing institution features
-            exposures_matrix: Matrix of financial exposures
-            
-        Returns:
-            PyTorch Geometric Data object
-        """
-        # Build network
-        network = self.network_builder.construct_network(institutions_data, exposures_matrix)
+    Returns:
+        PyTorch Geometric Data object
+    """
+    # Ensure consistent ordering and create a mapping from institution_id to integer index
+    ordered_institutions = institutions_data.sort_values(by='institution_id').reset_index(drop=True)
+    id_to_idx = {inst_id: i for i, inst_id in enumerate(ordered_institutions['institution_id'])}
+
+    # Select only numeric features for GNN
+    # Adjust this list if your features change
+    numeric_feature_cols = ['assets', 'capital', 'risk_weight'] 
+    if not all(col in ordered_institutions.columns for col in numeric_feature_cols):
+        missing_cols = [col for col in numeric_feature_cols if col not in ordered_institutions.columns]
+        raise ValueError(f"Missing required numeric feature columns in institutions_data: {missing_cols}")
+
+    node_features_df = ordered_institutions[numeric_feature_cols].copy()
+    for col in numeric_feature_cols:
+        node_features_df[col] = pd.to_numeric(node_features_df[col], errors='coerce')
+    node_features_df = node_features_df.fillna(0.0) # Fill NaNs with 0.0
+    node_features = torch.tensor(node_features_df.values, dtype=torch.float)
+
+    # Build network using the original (potentially unordered) institutions_data for consistency
+    # with how exposures_matrix might be aligned if it's also based on original order.
+    # The construct_network method itself uses institution_id for node naming.
+    network = self.network_builder.construct_network(institutions_data, exposures_matrix)
+    
+    # Get edge indices and attributes using the integer mapping
+    edge_list = []
+    edge_attr_list = []
+    
+    for u_str, v_str, data in network.edges(data=True):
+        if u_str not in id_to_idx or v_str not in id_to_idx:
+            logger.warning(f"Edge ({u_str}, {v_str}) contains an ID not in id_to_idx mapping. Skipping edge.")
+            continue
+        u_idx, v_idx = id_to_idx[u_str], id_to_idx[v_str]
+        edge_list.append([u_idx, v_idx])
+        edge_attr_list.append(data.get('weight', 1.0))
         
-        # Convert to PyTorch Geometric format
-        node_features = torch.tensor(
-            institutions_data.drop('institution_id', axis=1).values,
-            dtype=torch.float
-        )
-        
-        # Get edge indices and attributes
-        edge_index = []
-        edge_attr = []
-        
-        for i, j, data in network.edges(data=True):
-            edge_index.append([i, j])
-            edge_attr.append(data.get('weight', 1.0))
-            
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
-        edge_attr = torch.tensor(edge_attr, dtype=torch.float).view(-1, 1)
-        
-        return Data(
-            x=node_features,
-            edge_index=edge_index,
-            edge_attr=edge_attr
-        )
+    if not edge_list: # Handle case with no edges after filtering
+        edge_index = torch.empty((2,0), dtype=torch.long)
+        edge_attr = torch.empty((0,1), dtype=torch.float)
+    else:
+        edge_index = torch.tensor(edge_list, dtype=torch.long).t().contiguous()
+        edge_attr = torch.tensor(edge_attr_list, dtype=torch.float).view(-1, 1)
+    
+    return Data(
+        x=node_features,  # Features are now ordered by the new integer index
+        edge_index=edge_index,
+        edge_attr=edge_attr,
+        num_nodes=len(ordered_institutions) # Explicitly set num_nodes
+    )
     
     def analyze_contagion_risk(self, 
                              institutions_data: pd.DataFrame,

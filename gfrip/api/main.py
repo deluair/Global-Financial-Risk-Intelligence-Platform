@@ -12,6 +12,8 @@ import logging
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import pandas as pd
+import numpy as np
 
 # Import core components
 from gfrip.data.ingestion import AlternativeDataIngestionPipeline
@@ -193,8 +195,8 @@ async def analyze_contagion_risk(
         # Convert institutions to DataFrame
         institutions_df = pd.DataFrame([i.dict() for i in request.institutions])
         
-        # Get exposure matrix
-        exposure_matrix = request.exposures.matrix
+        # Get exposure matrix and convert to NumPy array with a specific float dtype
+        exposure_matrix = np.array(request.exposures.matrix, dtype=np.float64)
         
         # Run analysis
         results = contagion_analyzer.stress_test(
