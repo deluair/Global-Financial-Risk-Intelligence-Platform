@@ -1,0 +1,161 @@
+# GFRIP Configuration File
+
+# Application environment (development, staging, production)
+environment: "development"
+
+# API Configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  debug: true
+  secret_key: "replace-with-a-secure-secret-key"
+  algorithm: "HS256"
+  access_token_expire_minutes: 30
+  workers: 4
+
+# Logging Configuration
+logging:
+  level: "DEBUG"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/gfrip.log"
+  max_size_mb: 100
+  backup_count: 5
+
+# Data Sources Configuration
+data_sources:
+  satellite_imagery:
+    name: "satellite_imagery"
+    type: "api"
+    enabled: true
+    priority: 10
+    params:
+      providers: ["Planet Labs", "Maxar", "Sentinel-2"]
+      api_key: "your-satellite-api-key"
+      max_retries: 3
+      cache_ttl: 86400  # 24 hours in seconds
+  
+  social_media:
+    name: "social_media"
+    type: "api"
+    enabled: true
+    priority: 20
+    params:
+      platforms: ["Twitter", "Reddit", "News"]
+      api_key: "your-social-media-api-key"
+      rate_limit: 1000
+  
+  financial_markets:
+    name: "financial_markets"
+    type: "database"
+    enabled: true
+    priority: 30
+    params:
+      connection_string: "postgresql://user:password@localhost:5432/financial_data"
+      tables:
+        - "market_data"
+        - "institution_data"
+        - "exposures"
+
+# Machine Learning Models Configuration
+models:
+  contagion_gnn:
+    name: "contagion_gnn"
+    type: "graph_neural_network"
+    path: "models/contagion_gnn.pt"
+    version: "1.0.0"
+    enabled: true
+    params:
+      hidden_dim: 256
+      num_layers: 3
+      dropout: 0.1
+      learning_rate: 0.001
+      batch_size: 32
+  
+  sentiment_analyzer:
+    name: "sentiment_analyzer"
+    type: "transformer"
+    path: "models/sentiment_analyzer"
+    version: "1.0.0"
+    enabled: true
+    params:
+      model_name: "distilbert-base-uncased"
+      max_length: 128
+      batch_size: 16
+  
+  sovereign_risk_predictor:
+    name: "sovereign_risk_predictor"
+    type: "ensemble"
+    path: "models/sovereign_risk"
+    version: "1.0.0"
+    enabled: true
+    params:
+      feature_importance_threshold: 0.01
+      num_estimators: 100
+
+# Network Analysis Configuration
+network_analysis:
+  default_centrality_metrics:
+    - "degree"
+    - "betweenness"
+    - "eigenvector"
+    - "pagerank"
+  
+  shock_scenarios:
+    - name: "liquidity_crisis"
+      description: "20% reduction in liquidity"
+      node_attribute: "liquidity_ratio"
+      value: -0.2
+    
+    - name: "market_crash"
+      description: "30% drop in asset values"
+      node_attribute: "asset_value"
+      value: -0.3
+    
+    - name: "counterparty_default"
+      description: "Major counterparty default"
+      edge_attribute: "exposure"
+      value: -1.0  # 100% loss
+
+# Cache Configuration
+cache:
+  enabled: true
+  backend: "redis"  # or "memory"
+  ttl: 3600  # 1 hour in seconds
+  redis_url: "redis://localhost:6379/0"
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  metrics_port: 9100
+  endpoint: "/metrics"
+  log_level: "INFO"
+  alert_rules:
+    - name: "high_systemic_risk"
+      condition: "systemic_risk_score > 0.8"
+      severity: "critical"
+      notification_channels: ["email", "slack"]
+    
+    - name: "api_error_rate"
+      condition: "rate(api_errors_total[5m]) > 10"
+      severity: "warning"
+      notification_channels: ["slack"]
+
+# External Services
+external_services:
+  email:
+    enabled: false
+    provider: "smtp"  # or "ses", "sendgrid"
+    params:
+      host: "smtp.example.com"
+      port: 587
+      username: "user@example.com"
+      password: "your-email-password"
+      from_address: "noreply@gfrip.io"
+  
+  storage:
+    type: "s3"  # or "gcs", "azure"
+    params:
+      bucket: "gfrip-data"
+      region: "us-east-1"
+      access_key: "your-access-key"
+      secret_key: "your-secret-key"
